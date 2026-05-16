@@ -1,9 +1,16 @@
 import argparse
+from collections import Counter
 from dataclasses import dataclass
+import itertools
+import functools
 from enum import Enum
 import heapq
 from fractions import Fraction
-from rich import print
+from rich.console import Console
+import typing
+
+console = Console(soft_wrap=True)
+print = console.print
 
 class TurnAction(Enum):
     """
@@ -21,6 +28,9 @@ class VirtualSplitterDefinition:
     pass_fraction: Fraction
     cycle: list[TurnAction]
     weight_cost: int
+
+    def __hash__(self) -> int:
+        return hash((self.pass_fraction, tuple(self.cycle), self.weight_cost))
 
     def can_be_first(self) -> bool:
         """
@@ -91,6 +101,19 @@ ALL_VSPLITTER_DEFS = [
     VSPLITTER_1_OVER_7,
 ]
 
+T = typing.TypeVar('T')
+
+def sort_deduplicate(items: list[T]) -> list[T]:
+    """
+    Sort a list and remove duplicates.
+    """
+    items = sorted(items)
+    result = []
+    for item in items:
+        if not result or item != result[-1]:
+            result.append(item)
+    return result
+
 @dataclass(order=True)
 class BalancerDefinition:
     """
@@ -98,6 +121,15 @@ class BalancerDefinition:
     """
     pass_fraction: Fraction
     vsplitter_defs: list[VirtualSplitterDefinition]
+
+    def weight_cost(self) -> int:
+        """
+        The total weight cost of this balancer definition, as the sum of the weight costs of its virtual splitters.
+        """
+        return sum(vsplitter.weight_cost for vsplitter in self.vsplitter_defs)
+    
+    def __hash__(self) -> int:
+        return hash((self.pass_fraction, tuple(self.vsplitter_defs)))
 
     def normalize_in_place(self) -> None:
         """
@@ -159,6 +191,48 @@ class RatedBalancer:
     average_power: float
     definition: BalancerDefinition
 
+@dataclass(order=True, frozen=True)
+class BatteryDefinition:
+    """
+    A battery definition with a given power and duration.
+    """
+    power: float
+    duration: float
+    name: str
+
+@dataclass(order=True)
+class MaxDrain:
+    """
+    Maximum drain analysis result for a balancer definition with a given power demand.
+    """
+    demand: float
+    max_drain: float
+    def __add__(self, other: 'MaxDrain') -> 'MaxDrain':
+        return MaxDrain(demand=self.demand + other.demand, max_drain=self.max_drain + other.max_drain)
+
+@dataclass(order=True)
+class NontrivialLine:
+    """
+    A nontrivial line, annotated with balancer definition and battery definition.
+    """
+    balancer_definition: BalancerDefinition
+    battery_definition: BatteryDefinition
+    def average_power(self, seconds_per_tick: float) -> float:
+        return self.balancer_definition.pass_fraction * self.battery_definition.power * self.battery_definition.duration / seconds_per_tick
+
+@dataclass(order=True)
+class RatedFullSolution:
+    """
+    A full solution, which may contain multiple trivial and nontrivial lines.
+    """
+    maximum_safe_power: float
+    trivial_lines: Counter[BatteryDefinition, int]
+    nontrivial_lines: list[NontrivialLine]
+    def average_power(self, seconds_per_tick: float) -> float:
+        return sum(line.average_power(seconds_per_tick) for line in self.nontrivial_lines) + sum(battery.power * count for battery, count in self.trivial_lines.items())
+    def weight_cost(self) -> int:
+        return sum(line.balancer_definition.weight_cost() for line in self.nontrivial_lines)
+
 def generate_reachable_fractions(max_output: Fraction, max_weight_cost: int) -> list[BalancerDefinition]:
     """
     Use Dijkstra's algorithm to enumerate balancer definitions that fit in a maximum weight cost.
@@ -196,14 +270,15 @@ def generate_reachable_fractions(max_output: Fraction, max_weight_cost: int) -> 
     results = [result for result in results if result.is_valid()]
     return results
 
-def calculate_longest_drought(bdef: BalancerDefinition) -> int:
+@functools.cache
+def calculate_longest_gap(bdef: BalancerDefinition) -> int:
     """
-    Calculate the longest drought (number of turns between final output being reached).
+    Calculate the longest gap (number of turns between final output being reached).
     """
     vdefs = [VSPLITTER_IDENTITY] + bdef.vsplitter_defs + [VSPLITTER_IDENTITY]
     turn_index = [0] * len(vdefs)
     buffer = [0] * len(vdefs)
-    longest_drought = 0
+    longest_gap = 0
     num_cycles = 0
     current_drought = 0
     # Start counting on cycle 2, stop counting on cycle 5
@@ -217,7 +292,7 @@ def calculate_longest_drought(bdef: BalancerDefinition) -> int:
             current_drought += 1
         if buffer[-1]:
             # Output is reached
-            longest_drought = max(longest_drought, current_drought)
+            longest_gap = max(longest_gap, current_drought)
             current_drought = 0
             buffer[-1] = 0
         # Simulate a tick
@@ -232,9 +307,9 @@ def calculate_longest_drought(bdef: BalancerDefinition) -> int:
                 buffer[i] -= 1
             turn_index[i] = (turn_index[i] + 1) % len(vdefs[i].cycle)
         buffer[0] = 1
-    return longest_drought
+    return longest_gap
 
-def main():
+def old_main():
     parser = argparse.ArgumentParser(
         description="Calculate Endfield-style battery balancers"
     )
@@ -268,10 +343,10 @@ def main():
     full_power = safety_multiplier * args.battery_power * args.battery_duration / args.seconds_per_tick
     for bdef in bdefs:
         average_power = full_power * bdef.pass_fraction + args.base_power
-        longest_drought = calculate_longest_drought(bdef)
+        longest_gap = calculate_longest_gap(bdef)
         maximum_safe_power = safety_multiplier * min(
-            args.storage_energy / max(longest_drought * args.seconds_per_tick - args.battery_duration, 1e-10),
-            args.battery_power * args.battery_duration / (longest_drought * args.seconds_per_tick)
+            args.storage_energy / max(longest_gap * args.seconds_per_tick - args.battery_duration, 1e-10),
+            args.battery_power * args.battery_duration / (longest_gap * args.seconds_per_tick)
         ) + args.base_power
         rated_balancers.append(RatedBalancer(maximum_safe_power=maximum_safe_power, average_power=average_power, definition=bdef))
     rated_balancers.sort()
@@ -279,6 +354,93 @@ def main():
     print(f"[bold green]# All solutions:[/bold green]")
     for rated_balancer in rated_balancers:
         print(f"""[cyan]Safe for {rated_balancer.maximum_safe_power:.1f} W\t(actual average {rated_balancer.average_power:.1f} W):\t{rated_balancer.definition}[/cyan]""")
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Calculate Endfield-style battery balancers"
+    )
+
+    parser.add_argument("-l","--max-nontrivial-lines", type=int, default=2, help="Max number of nontrivial lines in a solution")
+    parser.add_argument("-L","--max-trivial-lines", type=int, default=3, help="Max number of trivial lines per battery type in a solution")
+    parser.add_argument("-b","--base-power", type=float, default=200, help="Power provided by always-on generators")
+    parser.add_argument("-s","--storage-energy", type=float, default=1e5, help="Max storage of the depot in joules")
+    parser.add_argument("-t","--seconds-per-tick", type=float, default=2, help="Belt speed as seconds per item")
+    parser.add_argument("-c","--max-weight-cost", type=int, default=60, help="Limit how complex solutions can be in abstract units")
+    parser.add_argument("-m","--safety-margin", type=float, default=0.01, help="Reduce fractional generator ratings by this much")
+    parser.add_argument("-P","--penalty-for-weight", type=float, default=1, help="1 weight unit of complexity is treated as this many watts of loss")
+
+    args = parser.parse_args()
+
+    BATTERY_TYPES = [
+        BatteryDefinition(power=1100, duration=40, name="HC Valley Battery"),
+        BatteryDefinition(power=3200, duration=40, name="SC Wuling Battery"),
+    ]
+
+    trivial_combinations = []
+    for counts in itertools.product(*[range(args.max_trivial_lines + 1)] * len(BATTERY_TYPES)):
+        battery_to_count = Counter({battery: count for battery, count in zip(BATTERY_TYPES, counts) if count > 0})
+        base_power = args.base_power + sum(battery.power * count for battery, count in battery_to_count.items())
+        trivial_combinations.append((base_power, battery_to_count))
+
+    print(f"[bold green]# Found {len(trivial_combinations)} distinct trivial line combinations.[/bold green]")
+
+    max_output_fraction = args.seconds_per_tick / max(battery.duration for battery in BATTERY_TYPES)
+    bdefs = generate_reachable_fractions(max_output_fraction, args.max_weight_cost)
+
+    print(f"[bold green]# Found {len(bdefs)} distinct balancer definitions.[/bold green]")
+
+    multi_lines = []
+    for num_nontrivial_lines in range(1, args.max_nontrivial_lines + 1):
+        for bdef_list in itertools.combinations_with_replacement(bdefs, num_nontrivial_lines):
+            if sum(bdef.weight_cost() for bdef in bdef_list) > args.max_weight_cost:
+                continue
+            for battery_list in itertools.product(*[BATTERY_TYPES] * num_nontrivial_lines):
+                nontrivial_lines = [NontrivialLine(balancer_definition=bdef, battery_definition=battery) for bdef, battery in zip(bdef_list, battery_list)]
+                # Max drain analysis
+                max_drains = []
+                for line in nontrivial_lines:
+                    average_power = line.average_power(args.seconds_per_tick)
+                    longest_gap = calculate_longest_gap(line.balancer_definition) * args.seconds_per_tick
+                    max_drain = average_power * (longest_gap - line.battery_definition.duration)
+                    max_drains.append(MaxDrain(demand=average_power, max_drain=max_drain))
+                total_max_drain = sum(max_drains, MaxDrain(demand=0, max_drain=0))
+                rating = total_max_drain.demand
+                if total_max_drain.max_drain > args.storage_energy:
+                    scale_factor = args.storage_energy / total_max_drain.max_drain
+                    rating *= scale_factor
+                rating *= 1 - args.safety_margin
+                multi_lines.append((rating, nontrivial_lines))
+    
+    print(f"[bold green]# Found {len(multi_lines)} nontrivial line combinations.[/bold green]")
+
+    multi_lines = sort_deduplicate(multi_lines)
+
+    print(f"[bold green]# Found {len(multi_lines)} distinct nontrivial line combinations.[/bold green]")
+
+    full_solutions = []
+    for rating, nontrivial_lines in multi_lines:
+        for base_power, trivial_lines in trivial_combinations:
+            full_solutions.append(RatedFullSolution(maximum_safe_power=base_power + rating, trivial_lines=trivial_lines, nontrivial_lines=nontrivial_lines))
+    
+    print(f"[bold green]# Found {len(full_solutions)} distinct full solutions.[/bold green]")
+
+    full_solutions.sort(key=lambda solution: (solution.maximum_safe_power, solution.average_power(args.seconds_per_tick) + args.penalty_for_weight * solution.weight_cost()))
+
+    print(f"[bold green]# All solutions:[/bold green]")
+    for full_solution in full_solutions:
+        inner_bits = []
+        for battery, count in full_solution.trivial_lines.items():
+            inner_bits.append(f"{battery.name} × {count}")
+        for line in full_solution.nontrivial_lines:
+            inner_bits.append(f"{line.battery_definition.name} × {line.balancer_definition}")
+        bits = [
+            "[cyan]",
+            f"Safe for {full_solution.maximum_safe_power:.1f} W\t",
+            f"(actual average {full_solution.average_power(args.seconds_per_tick) + args.base_power:.1f} W,\ttotal weight cost {full_solution.weight_cost()}):\t",
+            ",\t".join(inner_bits),
+            "[/cyan]",
+        ]
+        print("".join(bits))
 
 if __name__ == "__main__":
     main()
