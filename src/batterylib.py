@@ -196,14 +196,14 @@ def generate_reachable_fractions(max_output: Fraction, max_weight_cost: int) -> 
     results = [result for result in results if result.is_valid()]
     return results
 
-def calculate_longest_drought(bdef: BalancerDefinition) -> int:
+def calculate_longest_gap(bdef: BalancerDefinition) -> int:
     """
-    Calculate the longest drought (number of turns between final output being reached).
+    Calculate the longest gap (number of turns between final output being reached).
     """
     vdefs = [VSPLITTER_IDENTITY] + bdef.vsplitter_defs + [VSPLITTER_IDENTITY]
     turn_index = [0] * len(vdefs)
     buffer = [0] * len(vdefs)
-    longest_drought = 0
+    longest_gap = 0
     num_cycles = 0
     current_drought = 0
     # Start counting on cycle 2, stop counting on cycle 5
@@ -217,7 +217,7 @@ def calculate_longest_drought(bdef: BalancerDefinition) -> int:
             current_drought += 1
         if buffer[-1]:
             # Output is reached
-            longest_drought = max(longest_drought, current_drought)
+            longest_gap = max(longest_gap, current_drought)
             current_drought = 0
             buffer[-1] = 0
         # Simulate a tick
@@ -232,7 +232,7 @@ def calculate_longest_drought(bdef: BalancerDefinition) -> int:
                 buffer[i] -= 1
             turn_index[i] = (turn_index[i] + 1) % len(vdefs[i].cycle)
         buffer[0] = 1
-    return longest_drought
+    return longest_gap
 
 def main():
     parser = argparse.ArgumentParser(
@@ -268,10 +268,10 @@ def main():
     full_power = safety_multiplier * args.battery_power * args.battery_duration / args.seconds_per_tick
     for bdef in bdefs:
         average_power = full_power * bdef.pass_fraction + args.base_power
-        longest_drought = calculate_longest_drought(bdef)
+        longest_gap = calculate_longest_gap(bdef)
         maximum_safe_power = safety_multiplier * min(
-            args.storage_energy / max(longest_drought * args.seconds_per_tick - args.battery_duration, 1e-10),
-            args.battery_power * args.battery_duration / (longest_drought * args.seconds_per_tick)
+            args.storage_energy / max(longest_gap * args.seconds_per_tick - args.battery_duration, 1e-10),
+            args.battery_power * args.battery_duration / (longest_gap * args.seconds_per_tick)
         ) + args.base_power
         rated_balancers.append(RatedBalancer(maximum_safe_power=maximum_safe_power, average_power=average_power, definition=bdef))
     rated_balancers.sort()
