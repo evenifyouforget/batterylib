@@ -6,8 +6,11 @@ import functools
 from enum import Enum
 import heapq
 from fractions import Fraction
-from rich import print
+from rich.console import Console
 import typing
+
+console = Console(soft_wrap=True)
+print = console.print
 
 class TurnAction(Enum):
     """
@@ -433,7 +436,7 @@ def main():
         bits = [
             "[cyan]",
             f"Safe for {full_solution.maximum_safe_power:.1f} W\t",
-            f"(actual average {full_solution.average_power(args.seconds_per_tick):.1f} W,\ttotal weight cost {full_solution.weight_cost()}):\t",
+            f"(actual average {full_solution.average_power(args.seconds_per_tick) + args.base_power:.1f} W,\ttotal weight cost {full_solution.weight_cost()}):\t",
             ",\t".join(inner_bits),
             "[/cyan]",
         ]
