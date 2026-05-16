@@ -66,6 +66,7 @@ Endfield assumptions include:
 - Convergers are like splitters but just the inverse
 - Splitters and convergers run at belt speed (but without the offline speed reduction)
 - Battery income comes from elsewhere and is stashed in the depot (battery income decoupled from usage)
+- The problem domain is around 3000W to 7000W of demand
 
 ### Offline belt speed
 
