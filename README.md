@@ -109,8 +109,6 @@ Longest gap can be determined in complex cases by just simulating the balancer. 
 
 ### Part 2: Maximum Drain Analysis
 
-**This is not yet implemented.**
-
 Lines with no balancers are referred to interchangeably as always-on lines or fully-supplied lines. They are a special case that can be handled separately. Here we call them trivial lines.
 
 In the case of multiple nontrivial lines, the situation seems complicated - the rating may depend on the phase difference between the lines, the lines may have different cycle lengths, and the charge-discharge graph may appear as a complicated dance.
