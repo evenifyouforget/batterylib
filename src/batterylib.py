@@ -26,6 +26,9 @@ class VirtualSplitterDefinition:
     cycle: list[TurnAction]
     weight_cost: int
 
+    def __hash__(self) -> int:
+        return hash((self.pass_fraction, tuple(self.cycle), self.weight_cost))
+
     def can_be_first(self) -> bool:
         """
         Whether this virtual splitter achieves its advertised fraction when placed first.
@@ -121,6 +124,9 @@ class BalancerDefinition:
         The total weight cost of this balancer definition, as the sum of the weight costs of its virtual splitters.
         """
         return sum(vsplitter.weight_cost for vsplitter in self.vsplitter_defs)
+    
+    def __hash__(self) -> int:
+        return hash((self.pass_fraction, tuple(self.vsplitter_defs)))
 
     def normalize_in_place(self) -> None:
         """
@@ -383,7 +389,9 @@ def main():
     multi_lines = []
     for num_nontrivial_lines in range(1, args.max_nontrivial_lines + 1):
         for bdef_list in itertools.combinations_with_replacement(bdefs, num_nontrivial_lines):
-            for battery_list in itertools.product([BATTERY_TYPES] * num_nontrivial_lines):
+            if sum(bdef.weight_cost() for bdef in bdef_list) > args.max_weight_cost:
+                continue
+            for battery_list in itertools.product(*[BATTERY_TYPES] * num_nontrivial_lines):
                 nontrivial_lines = [NontrivialLine(balancer_definition=bdef, battery_definition=battery) for bdef, battery in zip(bdef_list, battery_list)]
                 # Max drain analysis
                 max_drains = []
@@ -425,7 +433,7 @@ def main():
         bits = [
             "[cyan]",
             f"Safe for {full_solution.maximum_safe_power:.1f} W\t",
-            f"(actual average {full_solution.average_power(args.seconds_per_tick):.1f} W, weight cost {full_solution.weight_cost()}):\t",
+            f"(actual average {full_solution.average_power(args.seconds_per_tick):.1f} W,\ttotal weight cost {full_solution.weight_cost()}):\t",
             ",\t".join(inner_bits),
             "[/cyan]",
         ]
