@@ -20,7 +20,7 @@ python3 src/batterylib.py
 Run tests:
 
 ```sh
-TODO
+python3 -m unittest discover -s tests
 ```
 
 Run linters:
