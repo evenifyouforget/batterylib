@@ -7,8 +7,8 @@ Endfield-style battery balancer solvers.
 Install requirements:
 
 ```sh
-uv venv
-TODO
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv sync
 ```
 
 Run the program:
@@ -20,7 +20,7 @@ python3 src/batterylib.py
 Run tests:
 
 ```sh
-TODO
+uv run pytest
 ```
 
 Run linters:
