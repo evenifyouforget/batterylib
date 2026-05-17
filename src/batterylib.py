@@ -221,7 +221,7 @@ class NontrivialLine:
         return self.balancer_definition.pass_fraction * self.battery_definition.power * self.battery_definition.duration / seconds_per_tick
     def is_valid(self, seconds_per_tick: float) -> bool:
         """
-        Returns true if this line can achieve is advertised average power, and is not a degenerate edge case.
+        Returns true if this line can achieve its advertised average power, and is not a degenerate edge case.
         """
         return 0 < self.balancer_definition.pass_fraction < min(1, seconds_per_tick / self.battery_definition.duration)
 
