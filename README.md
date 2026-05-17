@@ -119,7 +119,7 @@ Consider this simple example:
 
 > Line A: 1100 W for 40 seconds, then nothing for 360 seconds (400 seconds cycle)
 
-Obviously the average power is 110W. If we fix the power demand at 110 W (assuming no 200 W base): The maximum drain is 360s × 110W = 39600J. Our power reserves need to be at least this big; if we have, say, only 30000J of reserves, we will have a power outage.
+Obviously the average power is 110W. If we fix the power demand at 110 W (assuming no 200 W base): The maximum drain is 360s × 110W = 39600J. Our energy reserves need to be at least this big; if we have, say, only 30000J of reserves, we will have a power outage.
 
 We might try formatting this as
 

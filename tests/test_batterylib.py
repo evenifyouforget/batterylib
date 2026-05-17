@@ -10,6 +10,7 @@ from batterylib import (
     VSPLITTER_1_OVER_2,
     VSPLITTER_1_OVER_3,
     VSPLITTER_1_OVER_5,
+    VSPLITTER_1_OVER_7,
     BalancerDefinition,
     BatteryDefinition,
     MaxDrain,
@@ -25,86 +26,65 @@ ROOT = pathlib.Path(__file__).parent.parent
 
 # --- sort_deduplicate ---
 
-def test_sort_deduplicate_basic():
-    assert sort_deduplicate([3, 1, 2, 1]) == [1, 2, 3]
-
-def test_sort_deduplicate_empty():
-    assert sort_deduplicate([]) == []
-
-def test_sort_deduplicate_all_same():
-    assert sort_deduplicate([5, 5, 5]) == [5]
-
-def test_sort_deduplicate_no_dupes():
-    assert sort_deduplicate([1, 2, 3]) == [1, 2, 3]
+@pytest.mark.parametrize("input,expected", [
+    ([3, 1, 2, 1], [1, 2, 3]),
+    ([], []),
+    ([5, 5, 5], [5]),
+    ([1, 2, 3], [1, 2, 3]),
+    ([2, 2, 3, 1, 3], [1, 2, 3]),
+])
+def test_sort_deduplicate(input, expected):
+    assert sort_deduplicate(input) == expected
 
 
 # --- VirtualSplitterDefinition.can_be_first ---
 
-def test_can_be_first_without_recycle():
-    assert VSPLITTER_1_OVER_2.can_be_first() is True
-
-def test_can_be_first_with_recycle():
-    assert VSPLITTER_1_OVER_5.can_be_first() is False
+@pytest.mark.parametrize("vsplitter,expected", [
+    (VSPLITTER_1_OVER_2, True),
+    (VSPLITTER_1_OVER_3, True),
+    (VSPLITTER_1_OVER_5, False),
+    (VSPLITTER_1_OVER_7, False),
+])
+def test_can_be_first(vsplitter, expected):
+    assert vsplitter.can_be_first() is expected
 
 
 # --- BalancerDefinition.weight_cost ---
 
-def test_weight_cost_single():
-    bdef = BalancerDefinition(pass_fraction=Fraction(1, 2), vsplitter_defs=[VSPLITTER_1_OVER_2])
-    assert bdef.weight_cost() == 10
-
-def test_weight_cost_two_same():
-    bdef = BalancerDefinition(pass_fraction=Fraction(1, 4), vsplitter_defs=[VSPLITTER_1_OVER_2, VSPLITTER_1_OVER_2])
-    assert bdef.weight_cost() == 20
-
-def test_weight_cost_mixed():
-    bdef = BalancerDefinition(pass_fraction=Fraction(1, 6), vsplitter_defs=[VSPLITTER_1_OVER_2, VSPLITTER_1_OVER_3])
-    assert bdef.weight_cost() == 25
+@pytest.mark.parametrize("bdef,expected", [
+    (BalancerDefinition(pass_fraction=Fraction(1, 2), vsplitter_defs=[VSPLITTER_1_OVER_2]), 10),
+    (BalancerDefinition(pass_fraction=Fraction(1, 3), vsplitter_defs=[VSPLITTER_1_OVER_3]), 15),
+    (BalancerDefinition(pass_fraction=Fraction(1, 4), vsplitter_defs=[VSPLITTER_1_OVER_2, VSPLITTER_1_OVER_2]), 20),
+    (BalancerDefinition(pass_fraction=Fraction(1, 6), vsplitter_defs=[VSPLITTER_1_OVER_2, VSPLITTER_1_OVER_3]), 25),
+])
+def test_weight_cost(bdef, expected):
+    assert bdef.weight_cost() == expected
 
 
 # --- BalancerDefinition.is_valid ---
 
-def test_is_valid_single_half():
-    bdef = BalancerDefinition(pass_fraction=Fraction(1, 2), vsplitter_defs=[VSPLITTER_1_OVER_2])
-    assert bdef.is_valid() is True
-
-def test_is_valid_wrong_fraction():
-    bdef = BalancerDefinition(pass_fraction=Fraction(1, 3), vsplitter_defs=[VSPLITTER_1_OVER_2])
-    assert bdef.is_valid() is False
-
-def test_is_valid_recycle_first():
-    # 1/5 splitter has RECYCLE, cannot be first
-    bdef = BalancerDefinition(pass_fraction=Fraction(1, 5), vsplitter_defs=[VSPLITTER_1_OVER_5])
-    assert bdef.is_valid() is False
-
-def test_is_valid_recycle_after_half():
-    # 1/2 reduces fraction to 1/2, then 1/5 is valid (current_fraction <= 1/2)
-    bdef = BalancerDefinition(
-        pass_fraction=Fraction(1, 10),
-        vsplitter_defs=[VSPLITTER_1_OVER_2, VSPLITTER_1_OVER_5],
-    )
-    assert bdef.is_valid() is True
+@pytest.mark.parametrize("bdef,expected", [
+    (BalancerDefinition(pass_fraction=Fraction(1, 2), vsplitter_defs=[VSPLITTER_1_OVER_2]), True),
+    (BalancerDefinition(pass_fraction=Fraction(1, 3), vsplitter_defs=[VSPLITTER_1_OVER_3]), True),
+    (BalancerDefinition(pass_fraction=Fraction(1, 4), vsplitter_defs=[VSPLITTER_1_OVER_2, VSPLITTER_1_OVER_2]), True),
+    (BalancerDefinition(pass_fraction=Fraction(1, 3), vsplitter_defs=[VSPLITTER_1_OVER_2]), False),
+    (BalancerDefinition(pass_fraction=Fraction(1, 5), vsplitter_defs=[VSPLITTER_1_OVER_5]), False),
+    (BalancerDefinition(pass_fraction=Fraction(1, 10), vsplitter_defs=[VSPLITTER_1_OVER_2, VSPLITTER_1_OVER_5]), True),
+])
+def test_balancer_is_valid(bdef, expected):
+    assert bdef.is_valid() is expected
 
 
 # --- BalancerDefinition.__str__ ---
 
-def test_str_single():
-    bdef = BalancerDefinition(pass_fraction=Fraction(1, 2), vsplitter_defs=[VSPLITTER_1_OVER_2])
-    assert str(bdef) == "1/2 = 1/2"
-
-def test_str_repeated():
-    bdef = BalancerDefinition(
-        pass_fraction=Fraction(1, 4),
-        vsplitter_defs=[VSPLITTER_1_OVER_2, VSPLITTER_1_OVER_2],
-    )
-    assert str(bdef) == "1/4 = (1/2)^2"
-
-def test_str_mixed():
-    bdef = BalancerDefinition(
-        pass_fraction=Fraction(1, 6),
-        vsplitter_defs=[VSPLITTER_1_OVER_2, VSPLITTER_1_OVER_3],
-    )
-    assert str(bdef) == "1/6 = 1/2 × 1/3"
+@pytest.mark.parametrize("bdef,expected", [
+    (BalancerDefinition(pass_fraction=Fraction(1, 2), vsplitter_defs=[VSPLITTER_1_OVER_2]), "1/2 = 1/2"),
+    (BalancerDefinition(pass_fraction=Fraction(1, 3), vsplitter_defs=[VSPLITTER_1_OVER_3]), "1/3 = 1/3"),
+    (BalancerDefinition(pass_fraction=Fraction(1, 4), vsplitter_defs=[VSPLITTER_1_OVER_2, VSPLITTER_1_OVER_2]), "1/4 = (1/2)^2"),
+    (BalancerDefinition(pass_fraction=Fraction(1, 6), vsplitter_defs=[VSPLITTER_1_OVER_2, VSPLITTER_1_OVER_3]), "1/6 = 1/2 × 1/3"),
+])
+def test_balancer_str(bdef, expected):
+    assert str(bdef) == expected
 
 
 # --- MaxDrain.__add__ ---
@@ -122,14 +102,20 @@ def test_max_drain_add_identity():
     assert (zero + b) == b
 
 
-# --- NontrivialLine.average_power ---
+# --- NontrivialLine.average_power + is_valid ---
 
-def test_nontrivial_average_power():
-    bdef = BalancerDefinition(pass_fraction=Fraction(1, 2), vsplitter_defs=[VSPLITTER_1_OVER_2])
-    battery = BatteryDefinition(power=3200.0, duration=40.0, name="SC Wuling Battery")
+_SC = BatteryDefinition(power=3200.0, duration=40.0, name="SC Wuling Battery")
+
+@pytest.mark.parametrize("bdef,battery,spt,expected_avg,expected_valid", [
+    # 1/2: 0.5 >= min(1, 2/40)=0.05 → NOT valid
+    (BalancerDefinition(Fraction(1, 2), [VSPLITTER_1_OVER_2]), _SC, 2.0, 32000.0, False),
+    # 1/32=(1/2)^5: 0.03125 < 0.05 → valid; avg = (1/32)*3200*40/2 = 2000.0
+    (BalancerDefinition(Fraction(1, 32), [VSPLITTER_1_OVER_2] * 5), _SC, 2.0, 2000.0, True),
+])
+def test_nontrivial_line(bdef, battery, spt, expected_avg, expected_valid):
     line = NontrivialLine(balancer_definition=bdef, battery_definition=battery)
-    # 1/2 * 3200 * 40 / 2 = 32000
-    assert line.average_power(2.0) == pytest.approx(32000.0)
+    assert line.average_power(spt) == pytest.approx(expected_avg)
+    assert line.is_valid(spt) is expected_valid
 
 
 # --- generate_reachable_fractions ---
@@ -162,9 +148,10 @@ def test_calculate_longest_gap_deterministic():
 
 # --- Snapshot: CLI output ---
 
-def test_main_cli_snapshot(snapshot):
+@pytest.mark.parametrize("weight_cost", [50, 80, 90])
+def test_main_cli_snapshot(snapshot, weight_cost):
     result = subprocess.run(
-        [sys.executable, str(ROOT / "src" / "batterylib.py"), "-c", "50"],
+        [sys.executable, str(ROOT / "src" / "batterylib.py"), "-c", str(weight_cost)],
         capture_output=True,
         text=True,
         cwd=ROOT,
