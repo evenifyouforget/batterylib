@@ -4,8 +4,18 @@ import itertools
 
 from rich.console import Console
 
-from .algorithms import calculate_longest_gap, generate_reachable_fractions, sort_deduplicate
-from .models import BatteryDefinition, MaxDrain, NontrivialLine, RatedBalancer, RatedFullSolution
+from .algorithms import (
+    calculate_longest_gap,
+    generate_reachable_fractions,
+    sort_deduplicate,
+)
+from .models import (
+    BatteryDefinition,
+    MaxDrain,
+    NontrivialLine,
+    RatedBalancer,
+    RatedFullSolution,
+)
 
 console = Console(soft_wrap=True)
 print = console.print
