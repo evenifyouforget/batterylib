@@ -4,6 +4,10 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = ["rich"]
 
+[project.scripts]
+batterylib = "batterylib.cli:main"
+batterylib-old = "batterylib.cli:old_main"
+
 [dependency-groups]
 dev = [
     "pytest>=8",

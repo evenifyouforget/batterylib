@@ -1,3 +1,4 @@
+import os
 import pathlib
 import subprocess
 import sys
@@ -273,10 +274,11 @@ def test_calculate_longest_gap_deterministic():
 @pytest.mark.parametrize("weight_cost", [50, 80, 90])
 def test_main_cli_snapshot(snapshot, weight_cost):
     result = subprocess.run(
-        [sys.executable, str(ROOT / "src" / "batterylib.py"), "-c", str(weight_cost)],
+        [sys.executable, "-m", "batterylib", "-c", str(weight_cost)],
         capture_output=True,
         text=True,
         cwd=ROOT,
+        env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
     )
     assert result.returncode == 0
     assert result.stdout == snapshot
