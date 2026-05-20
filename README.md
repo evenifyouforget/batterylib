@@ -14,7 +14,13 @@ uv sync
 Run the program:
 
 ```sh
-python3 src/batterylib.py
+uv run batterylib
+```
+
+Run the legacy solver:
+
+```sh
+uv run batterylib-old
 ```
 
 Run tests:
